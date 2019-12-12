@@ -163,8 +163,8 @@ double delta_find_degree(double x,double y,double heading)
 			et=-et;
 		}
 		delta_sum_result = et+delta1;
-		if(delta1>M_PI) delta1=delta1-2*M_PI;
-		if(delta1<-M_PI) delta1=delta1+2*M_PI; //delta1<0顺时针转 +
+		if(delta_sum_result>M_PI) delta_sum_result=delta_sum_result-2*M_PI;
+		if(delta_sum_result<-M_PI) delta_sum_result=delta_sum_result+2*M_PI; //delta1<0顺时针转 +
 		track_log<<setprecision(12)<<e_dis<<","<<setprecision(12)<<et<<",";
 		printf("e_dis=%lf,et=%lf,",e_dis,et);
 	
