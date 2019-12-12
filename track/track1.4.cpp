@@ -2,6 +2,7 @@
 #include <sensor_msgs/NavSatFix.h>
 #include <geometry_msgs/Vector3.h>
 #include <sensor_msgs/PointCloud2ConstPtr>
+#include <std_msgs/Float64.h>
 #include <iostream>
 #include <stdlib.h>
 #include <iomanip>
@@ -10,9 +11,7 @@
 #include <vector>
 #include <string>
 #include <algorithm>
-#include <pcl/point_types.h>
-#include <pcl/conversions.h>
-#include <pcl/ModelCoefficients.h>
+
 #define _USE_MATH_DEFINES 
 using namespace std;
 
@@ -20,19 +19,17 @@ ofstream track_set("track_set.csv",ios::out);
 ofstream track_log("track_log.csv",ios::out);
 
 vector<vector<double> >a;  //目标点
-int num_curr=0; //当前目标点
-int look_ahead_point;
-
+double degree[10000];
 double k=0.2; 		//横向偏转比例
 double vt=1.0;		//速度1.0m/s,控制命令0.2
-double l=0.3;     //轴长
+int num_curr=0; //当前目标点
 //----module读取csv文件转化为二维数组a,并记录a内值(目标点值)
 inline void file_to_string(vector<string> &record, const string& line, char delimiter);
 inline double string_to_float(string str);
 void read_file();
 void read();
 
-/********************************** pure pursuit循迹 **************************************/ 
+/********************************** stanley pursuit循迹 **************************************/ 
 //寻找最近点作为目标点,规定新点只能沿路径朝前  ??可能会跳过点
 int nearest_find(double x,double y)
 {
@@ -52,41 +49,43 @@ int nearest_find(double x,double y)
 	return res_num;
 }
 
-double pp_delta_find_degree(double x,double y,double heading)
+double delta_find_degree(double x,double y,double heading)//stanley method
 {
 	double degree_usv;//无人船->目标点角度
-	double delta_u2p_degree;//α
-	double delta_control;
-	// // // // // // delta1 = heading - degree[num_curr];
-	// // // // // // if(delta1>M_PI) delta1=delta1-2*M_PI;
-	// // // // // // if(delta1<-M_PI) delta1=delta1+2*M_PI; //delta1<0顺时针转 +
-	// // // // // // printf("delta1=%lf\n",delta1);
-	double ld=sqrt((a[look_ahead_point][0]-x)*(a[look_ahead_point][0]-x)+(a[look_ahead_point][1]-y)*(a[look_ahead_point][1]-y));
+	double delta1;//艏向与切向夹角
+	double delta_sum_result;
 
-	//计算无人船->目标点角度
-	degree_usv=atan((a[look_ahead_point][0]-x)/(a[look_ahead_point][1]-y)); 
-	if(a[look_ahead_point][1]<=y&&a[look_ahead_point][0]>x) degree_usv=M_PI+degree_usv;
-	if(a[look_ahead_point][1]<=y&&a[look_ahead_point][0]<=x) degree_usv=-M_PI+degree_usv;
-	//α
-	delta_u2p_degree=heading-degree_usv;
-	if(delta_u2p_degree>M_PI) delta_u2p_degree=delta_u2p_degree-2*M_PI;
-	if(delta_u2p_degree<-M_PI) delta_u2p_degree=delta_u2p_degree+2*M_PI;
+	delta1 = heading - degree[num_curr];
+	if(delta1>M_PI) delta1=delta1-2*M_PI;
+	if(delta1<-M_PI) delta1=delta1+2*M_PI; //delta1<0顺时针转 +
+	printf("delta1=%lf\n",delta1);
+	double e_dis;
 
-	if(delta_u2p_degree<=-M_PI/2||delta_u2p_degree>=M_PI/2)
-	{
-		if(delta_u2p_degree>0)
-		    delta_control=M_PI/2;
-		if(delta_u2p_degree<0)
-			delta_control=-M_PI/2;
-	}
-	else
-	{
-		delta_control=atan(sin(delta_u2p_degree)*2*l/ld);
-	}
+	
+		double dis_u2p=sqrt((a[num_curr][0]-x)*(a[num_curr][0]-x)+(a[num_curr][1]-y)*(a[num_curr][1]-y));
 
-	track_log<<setprecision(12)<<delta_u2p_degree<<","<<setprecision(12)<<ld<<","<<setprecision(12)<<delta_control<<",";
-	printf("α=%lf,ld=%lf,delta=%lf,\n",delta_u2p_degree,ld,delta_control);
-	return delta_control;
+		//计算无人船->目标点角度
+		degree_usv=atan((a[num_curr][0]-x)/(a[num_curr][1]-y)); 
+		if(a[num_curr][1]<=y&&a[num_curr][0]>x) degree_usv=M_PI+degree_usv;
+		if(a[num_curr][1]<=y&&a[num_curr][0]<=x) degree_usv=-M_PI+degree_usv;
+		double judge_delta_degree=degree_usv-degree[num_curr];
+		if(judge_delta_degree>M_PI) judge_delta_degree=judge_delta_degree-2*M_PI;
+		if(judge_delta_degree<-M_PI) judge_delta_degree=judge_delta_degree+2*M_PI;
+		e_dis=fabs(dis_u2p*sin(judge_delta_degree));
+		double et=atan(k*e_dis*e_dis/vt/2);
+		if(judge_delta_degree>=0)
+		{
+			et=-et;
+		}
+		delta_sum_result = et+delta1;
+		if(delta1>M_PI) delta1=delta1-2*M_PI;
+		if(delta1<-M_PI) delta1=delta1+2*M_PI; //delta1<0顺时针转 +
+		track_log<<setprecision(12)<<e_dis<<","<<setprecision(12)<<et<<",";
+		printf("e_dis=%lf,et=%lf,",e_dis,et);
+	
+	track_log<<setprecision(12)<<delta_sum_result<<",";
+	printf("delta=%lf\n",delta_sum_result);
+	return delta_sum_result;
 }
 /**************************** pure pursuit循迹 **************************************/
 class track //使用class以便同时实现订阅与发布功能
@@ -130,21 +129,32 @@ public:
 				heading=heading-2*M_PI;
 
 
+			double distance;
 			num_curr=nearest_find(x,y);
-			if(num_curr<a.size()-10)
-				look_ahead_point=num_curr+10;
-			else 
-				look_ahead_point=a.size()-1;
-			
-			printf("ux=%lf,uy=%lf,heading=%lf\n px=%lf,py=%lf\n",x,y,heading,a[num_curr][0],a[num_curr][1]);
+			distance=sqrt((a[num_curr][0]-x)*(a[num_curr][0]-x)+(a[num_curr][1]-y)*(a[num_curr][1]-y));
+			printf("ux=%lf,uy=%lf,heading=%lf\n px=%lf,py=%lf,degree=%lf\n",x,y,heading,a[num_curr][0],a[num_curr][1],degree[num_curr]);
 			track_log<<setprecision(12)<<x<<","<<setprecision(12)<<y<<","<<setprecision(12)<<heading<<","<<setprecision(12)<<a[num_curr][0]<<","
-            <<setprecision(12)<<a[num_curr][1]<<","<<setprecision(12)<<a[look_ahead_point][0]<<","<<setprecision(12)<<a[look_ahead_point][1]<<",";
+            <<setprecision(12)<<a[num_curr][1]<<","<<setprecision(12)<<degree[num_curr]<<",";
 
+			if(num_curr==a.size()&&distance<=0.5)
+			{
+				vtg.x=-0.15;
+				vtg.y=0;
+				if(distance<=0.3)
+				{
+					vtg.x=-0.05;
+					vtg.y=0;
+				}
+				pub.publish(vtg); //发布速度值与方向*/
+				printf("near the last point\n");
+				track_log<<setprecision(12)<<distance<<","<<setprecision(12)<<vtg.x<<","<<setprecision(12)<<vtg.y<<endl;
+			}
 
-
-			//计算与目标角度差值
+			else
+			{
+				//计算与目标角度差值
 			double delta_control;
-			delta_control=pp_delta_find_degree(x,y,heading);
+			delta_control=delta_find_degree(x,y,heading);
 			delta_control=judge_control(delta_control);
 			
 			vtg.x=0.2; //速度默认接近1m/s
@@ -181,7 +191,7 @@ public:
 			track_log<<setprecision(12)<<vtg.x<<","<<setprecision(12)<<vtg.y<<endl;
 			printf("v=%f,r=%f\n",vtg.x,vtg.y);
 			pub.publish(vtg); //发布速度值与方向*/
-			
+			}
 		}
     }
 	/*******************vo避障**********************/
