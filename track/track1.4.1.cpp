@@ -28,7 +28,7 @@ public:
 		printf("****************\n");                    
 		vector<double> push_degree;
 		vector< vector<double> > vo_degree;
-		int size= end(msg.data) - begin(msg.data);
+		int size= msg.data.end() - msg.data.begin();
 		printf("%d\n",size);
 		double delta_control;
 		/********************vo计算***********************/
@@ -135,7 +135,7 @@ public:
 			{
 				if(heading_degree>vo_degree[i][0]&&heading_degree<vo_degree[i][1])
 				{
-					if(heading_degree-vo_degree[i][0]<vo_sdegree[i][1]-heading_degree) heading_degree=vo_degree[i][0];
+					if(heading_degree-vo_degree[i][0]<vo_degree[i][1]-heading_degree) heading_degree=vo_degree[i][0];
 					else heading_degree=vo_degree[i][1];
 				}
 				break;
