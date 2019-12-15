@@ -33,17 +33,17 @@ public:
         state.x=113.3831616;
         state.y=23.06900558;
 
-		state.x_m= state.x*20037508.34/180;
-		state.y_m = log(tan((90+state.y)*M_PI/360))/(M_PI/180);
-		state.y_m = state.y_m*20037508.34/180;              //对接收到的经纬度进行处理，得到墨卡托坐标（单位m）
+	state.x_m= state.x*20037508.34/180;
+	state.y_m = log(tan((90+state.y)*M_PI/360))/(M_PI/180);
+	state.y_m = state.y_m*20037508.34/180;              //对接收到的经纬度进行处理，得到墨卡托坐标（单位m）
         
         send_gps_msg.position_covariance[1]=state.heading/M_PI*180;
         send_gps_msg.longitude=state.x;
         send_gps_msg.latitude=state.y;
 
-        double cloud_set[16]={2,5,2,-1,4,5,4,-1,2,5,2,-1,4,5,4,-1};
-        for(int i=0;i<16;i++)
-            cloud_msg.data.push_back(cloud_set[i]);
+        //double cloud_set[16]={2,5,2,-1,4,5,4,-1,2,5,2,-1,4,5,4,-1};
+        //for(int i=0;i<16;i++)
+        //cloud_msg.data.push_back(cloud_set[i]);
     }
     void onmsg_vtg(const geometry_msgs::Vector3 &msg)//收到控制命令，无人船运动，更新状态
     {
@@ -52,7 +52,7 @@ public:
     void pub_state()
     {
         pub.publish(send_gps_msg);
-        pub_cloud.publish(cloud_msg);
+        //pub_cloud.publish(cloud_msg);
     }
     void update_state(double v_control,double r_control)
     {
