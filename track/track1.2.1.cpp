@@ -18,7 +18,7 @@ ofstream track_log("track_log.csv",ios::out);
 
 vector<vector<double> >a;  //目标点
 double degree[10000];
-double k=0.8; 		//横向偏转比例
+double k=0.2; 		//横向偏转比例
 double vt=1.0;		//速度1.0m/s,控制命令0.2
 int num_curr=0; //当前目标点
 
@@ -163,8 +163,8 @@ double delta_find_degree(double x,double y,double heading)
 			et=-et;
 		}
 		delta_sum_result = et+delta1;
-		if(delta1>M_PI) delta1=delta1-2*M_PI;
-		if(delta1<-M_PI) delta1=delta1+2*M_PI; //delta1<0顺时针转 +
+		if(delta_sum_result>M_PI) delta_sum_result=delta_sum_result-2*M_PI;
+		if(delta_sum_result<-M_PI) delta_sum_result=delta_sum_result+2*M_PI; //delta1<0顺时针转 +
 		track_log<<setprecision(12)<<e_dis<<","<<setprecision(12)<<et<<",";
 		printf("e_dis=%lf,et=%lf,",e_dis,et);
 	
@@ -288,7 +288,7 @@ private:
 };
 
 int main(int argc,char ** argv){
-	track_log<<"usv.x,"<<"usv.y,"<<"usv.heading,"<<"point.x,"<<"point.y,"<<"point.degree,"<<"stanley_e_dis,"<<"stanley_et_degree,"<<"distance,"<<"delta_control,"<<"v,"<<"r"<<endl;
+	track_log<<"usv.x,"<<"usv.y,"<<"usv.heading,"<<"point.x,"<<"point.y,"<<"point.degree,"<<"stanley_e_dis,"<<"stanley_et_degree,"<<"delta_control,"<<"v,"<<"r"<<endl;
 	track_set<<"x,"<<"y"<<endl;
 	read();
     printf("total numbers of point: %ld\n",a.size());
