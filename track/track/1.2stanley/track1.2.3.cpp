@@ -18,9 +18,17 @@ ofstream track_log("track_log.csv",ios::out);
 
 vector<vector<double> >a;  //目标点
 double degree[10000];
+double delta_diff[10000];
 double k=0.2; 		//横向偏转比例
-double vt=2.0;		//速度1.0m/s,控制命令0.2
+double vt=1.0;		//速度1.0m/s,控制命令0.2
+double dt=0.05;		//时间间隔0.05s
 int num_curr=0; //当前目标点
+int TI=0; //积分时间
+int TD=10; //微分时间
+int T=0; 
+double intergral=0; //积分控制器
+double differential=0; //微分控制器
+
 
 //----module读取csv文件转化为二维数组a,并记录a内值(目标点值)
 // *********************************** //
@@ -34,10 +42,9 @@ void read();
 int nearest_find(double x,double y)
 {
 	double temp_dis;
-	double min_dis=100000000;
+	double min_dis=100000;
 	int    res_num;
-	int    length_point_num=a.size()-1;
-	printf("%d\n",length_point_num);
+	int    length_point_num=a.size();
 	for(int i=num_curr;i<length_point_num-1;i++)
 	{
 		temp_dis=sqrt((a[i][0]-x)*(a[i][0]-x)+(a[i][1]-y)*(a[i][1]-y));
@@ -47,7 +54,6 @@ int nearest_find(double x,double y)
 			min_dis=temp_dis;
 		}
 	}
-printf("%d\n",res_num);
 	return res_num;
 }
 
@@ -64,26 +70,25 @@ double delta_find_degree(double x,double y,double heading)//stanley method
 	double e_dis;
 
 	
-	double dis_u2p=sqrt((a[num_curr][0]-x)*(a[num_curr][0]-x)+(a[num_curr][1]-y)*(a[num_curr][1]-y));
+		double dis_u2p=sqrt((a[num_curr][0]-x)*(a[num_curr][0]-x)+(a[num_curr][1]-y)*(a[num_curr][1]-y));
 
 		//计算无人船->目标点角度
 		degree_u2p=atan((a[num_curr][0]-x)/(a[num_curr][1]-y)); 
 		if(a[num_curr][1]<=y&&a[num_curr][0]>x) degree_u2p=M_PI+degree_u2p;
 		if(a[num_curr][1]<=y&&a[num_curr][0]<=x) degree_u2p=-M_PI+degree_u2p;
 
-		double judge_delta_degree=degree_u2p-degree[num_curr];
+		double judge_delta_degree=degree_u2p-degree[num_curr];//艏向与目标点方向夹角
 		if(judge_delta_degree>M_PI) judge_delta_degree=judge_delta_degree-2*M_PI;
 		if(judge_delta_degree<-M_PI) judge_delta_degree=judge_delta_degree+2*M_PI;
 		e_dis=fabs(dis_u2p*sin(judge_delta_degree));
-
 		double et=atan(k*e_dis*e_dis/vt/2);
 		if(judge_delta_degree>=0)
 		{
 			et=-et;
 		}
 		delta_sum_result = et+delta1;
-		if(delta_sum_result>M_PI) delta_sum_result=delta_sum_result-2*M_PI;
-		if(delta_sum_result<-M_PI) delta_sum_result=delta_sum_result+2*M_PI; //delta1<0顺时针转 +
+		if(delta1>M_PI) delta1=delta1-2*M_PI;
+		if(delta1<-M_PI) delta1=delta1+2*M_PI; //delta1<0顺时针转 +
 		track_log<<setprecision(12)<<e_dis<<","<<setprecision(12)<<et<<",";
 		printf("e_dis=%lf,et=%lf,",e_dis,et);
 	
@@ -95,16 +100,15 @@ double delta_find_degree(double x,double y,double heading)//stanley method
 class track //使用class以便同时实现订阅与发布功能
 {
 public:
-    track()
+    track(int init_track)
     {
         pub = nh.advertise <geometry_msgs::Vector3>("vtg",1000);         
         sub_gps = nh.subscribe("unionstrong/gpfpd",1000,&track::onmsg_gps,this);
 		printf("success connected");
     }
     void onmsg_gps(const sensor_msgs::NavSatFix& msg)//接收到gps信号时
-    {		
-		printf("num:%d size %ld lon:%f lat:%f\n",num_curr,a.size(),a[num_curr][0],a[num_curr][1]);
-
+    {
+		printf("num:%d lon:%f lat:%f\n",num_curr,a[num_curr][0],a[num_curr][1]);
 		geometry_msgs::Vector3 vtg; //待发送的速度与方向，速度存在x，方向存在y
 		if(msg.longitude<0.1) //如果gps经纬度为0，0，无动作
 		{
@@ -125,7 +129,6 @@ public:
 			x = msg.longitude*20037508.34/180;
 			y = log(tan((90+msg.latitude)*M_PI/360))/(M_PI/180);
 			y = y*20037508.34/180;              //对接收到的经纬度进行处理，得到墨卡托坐标（单位m）
-
 			//计算船头朝向
 			double heading;
 			heading=msg.position_covariance[1]/180*M_PI;
@@ -138,86 +141,49 @@ public:
 			printf("ux=%lf,uy=%lf,heading=%lf\n px=%lf,py=%lf,degree=%lf\n",x,y,heading,a[num_curr][0],a[num_curr][1],degree[num_curr]);
 			track_log<<setprecision(12)<<x<<","<<setprecision(12)<<y<<","<<setprecision(12)<<heading<<","<<setprecision(12)<<a[num_curr][0]<<","
             <<setprecision(12)<<a[num_curr][1]<<","<<setprecision(12)<<degree[num_curr]<<",";
-			if(num_curr==a.size()-2)
+			if(num_curr==a.size()&&distance<=0.5)
 			{
-				double delta_control;
-				vtg.x=-0.8;
-				double degree_u2p=atan((a[num_curr][0]-x)/(a[num_curr][1]-y)); 
-				if(a[num_curr][1]<=y&&a[num_curr][0]>x) degree_u2p=M_PI+degree_u2p;
-				if(a[num_curr][1]<=y&&a[num_curr][0]<=x) degree_u2p=-M_PI+degree_u2p;
-
-				double judge_delta_degree = degree_u2p - degree[num_curr];
-				if(judge_delta_degree>M_PI) judge_delta_degree=judge_delta_degree-2*M_PI;
-				if(judge_delta_degree<-M_PI) judge_delta_degree=judge_delta_degree+2*M_PI;
-				
-				if(fabs(judge_delta_degree)<=M_PI/2)
+				vtg.x=-0.15;
+				vtg.y=0;
+				if(distance<=0.3)
 				{
-					if(distance>5)	vtg.x = 0.8;
-					else if(distance<5) vtg.x = 0.8*distance/5;
-					delta_control=delta_find_degree(x,y,heading);	
+					vtg.x=-0.05;
+					vtg.y=0;
 				}
-				else if(fabs(judge_delta_degree)>M_PI/2)
-				{
-					if(distance>5) vtg.x = -0.8;
-					else if(distance<5) vtg.x = -0.8*distance/5;
-					delta_control = delta_find_degree(x,y,heading);
-				}
-
-				if(delta_control<M_PI/4&&delta_control>=0)  //幂函数控制器
-					delta_control=sqrt(delta_control*M_PI)/2;
-				if(delta_control>-M_PI/4&&delta_control<0)
-					delta_control=-sqrt(-delta_control*M_PI)/2;
-				if((delta_control>=0&&delta_control<M_PI)||delta_control<=-M_PI)  //控制量大于零，即艏向在顺时针方向大于目标方向，将控制量变小，逆时针运动
-	    		{
-		 			//ni  -1
-					 
-					if(delta_control<0)
-					{
-						delta_control=delta_control+M_PI*2;       //delta变到0到π内，以便分段转换为控制量
-					}
-					//分段控制
-					if(delta_control<=M_PI/2)             //90度以内比例控制方向，90度为满舵
-					{
-						vtg.y=-(delta_control)/M_PI*2; 
-					}
-					else                          //大于90度直接满舵
-					{
-						vtg.y=-1;              
-					}
-		    		
-	    		}
-	    		else if((delta_control<0&&delta_control>-M_PI)||delta_control>=M_PI)
-	    		{
-					//顺时针转向
-					//shun  +1
-					if(delta_control>0)
-					{
-						delta_control = delta_control - M_PI*2;
-					}
-					if(delta_control >= -M_PI/2)
-					{
-						vtg.y = -delta_control / M_PI*2;
-					}	
-					else
-					{
-						vtg.y=1;
-					}
-		    	}
 				pub.publish(vtg); //发布速度值与方向*/
-				printf("near the last points: distance=%lf v=%f,r=%f\n",distance,vtg.x,vtg.y);
-				track_log<<setprecision(12)<<delta_control<<setprecision(12)<<distance<<","<<setprecision(12)<<vtg.x<<","<<setprecision(12)<<vtg.y<<endl;
+				printf("near the last point\n");
+				track_log<<setprecision(12)<<distance<<","<<setprecision(12)<<vtg.x<<","<<setprecision(12)<<vtg.y<<endl;
 			}
 			else
 			{
 
 				//计算与目标角度差值
 				double delta_control;
+				if(num_curr)
 				delta_control=delta_find_degree(x,y,heading);
-				if(delta_control<M_PI/4&&delta_control>=0)  //幂函数控制器
-					delta_control=sqrt(delta_control*M_PI)/2;
-				if(delta_control>-M_PI/4&&delta_control<0)
-					delta_control=-sqrt(-delta_control*M_PI)/2;
-				vtg.x=0.8; //速度默认接近1m/s
+				delta_diff[T] = delta_control;
+				T++;
+
+				//积分控制器
+				if(delta_control >= M_PI/3)	intergral += 0;
+				else if(delta_control <= M_PI/6) intergral += 1/dt;
+				else intergral += (M_PI/3-delta_control)/M_PI*6/dt;
+				TI++; //积分时间递增
+
+				//微分控制器
+				if(T >= 2){
+					differential += (delta_diff[T-1]-delta_diff[T-2])/dt;
+					if(T >= 12){
+						differential -= (delta_diff[T-11]-delta_diff[T-12])/dt;
+					}
+				}
+
+
+				// if(delta_control<M_PI/4&&delta_control>=0)  //幂函数控制器
+				// 	delta_control=sqrt(delta_control*M_PI)/2;
+				// if(delta_control>-M_PI/4&&delta_control<0)
+				// 	delta_control=-sqrt(-delta_control*M_PI)/2;
+				vtg.x=0.2; //速度默认接近1m/s
 				if((delta_control>=0&&delta_control<M_PI)||delta_control<=-M_PI)  //控制量大于零，即艏向在顺时针方向大于目标方向，将控制量变小，逆时针运动
 	    		{
 		 			//ni  -1
@@ -229,7 +195,7 @@ public:
 					//分段控制
 					if(delta_control<=M_PI/2)             //90度以内比例控制方向，90度为满舵
 					{
-						vtg.y=-(delta_control)/M_PI*2; 
+						vtg.y=-(delta_control+intergral/TI+differential*TD)/M_PI*2; 
 					}
 					else                          //大于90度直接满舵
 					{
@@ -247,15 +213,15 @@ public:
 					}
 					if(delta_control >= -M_PI/2)
 					{
-						vtg.y = -delta_control / M_PI*2;
+						vtg.y = -(delta_control+intergral/TI+differential*TD)/ M_PI*2;
 					}	
 					else
 					{
 						vtg.y=1;
 					}
 		    	}
-				track_log<<setprecision(12)<<delta_control<<setprecision(12)<<distance<<setprecision(12)<<vtg.x<<","<<setprecision(12)<<vtg.y<<endl;
-				printf("distance=%lf v=%f,r=%f\n",distance,vtg.x,vtg.y);
+				track_log<<setprecision(12)<<vtg.x<<","<<setprecision(12)<<vtg.y<<endl;
+				printf("v=%f,r=%f\n",vtg.x,vtg.y);
 				pub.publish(vtg); //发布速度值与方向*/
 			}
 		}
@@ -267,7 +233,7 @@ private:
 };
 
 int main(int argc,char ** argv){
-	track_log<<"usv.x,"<<"usv.y,"<<"usv.heading,"<<"point.x,"<<"point.y,"<<"point.degree,"<<"stanley_e_dis,"<<"stanley_et_degree,"<<"delta_control,"<<"distance,"<<"v,"<<"r"<<endl;
+	track_log<<"usv.x,"<<"usv.y,"<<"usv.heading,"<<"point.x,"<<"point.y,"<<"point.degree,"<<"stanley_e_dis,"<<"stanley_et_degree,"<<"distance,"<<"delta_control,"<<"v,"<<"r"<<endl;
 	track_set<<"x,"<<"y"<<endl;
 	read();
     printf("total numbers of point: %ld\n",a.size());
@@ -286,7 +252,7 @@ int main(int argc,char ** argv){
 
     ros::init(argc,argv,"track");
 	int init_temp=0;
-    track track1; //start exec
+    track track1(init_temp); //start exec
   	ros::spin();  
 
 
@@ -315,17 +281,18 @@ void read()
 
 
 			file_to_string(row, line, ',');  //把line里的单元格数字字符提取出来，“,”为单元格分隔符
-        	for(int i=0; i<=1; i++){
+        	for(int i=1; i>=0; i--){
         	double x;
         	double y=string_to_float(row[i]);
         	if(i==1)
         	{
-        		x=y; 
+        		x=y*20037508.34/180; 
 			}
 			else if(i==0)
 			{
 				                
-				x=y;
+				x=log(tan((90+y)*M_PI/360))/(M_PI/180);
+				x=x*20037508.34/180;  
 			}
             b.push_back(x);
        	 	}
