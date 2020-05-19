@@ -52,7 +52,12 @@ ADD_MESSAGE_FILES(
   FILES
   localObstacle.msg
   globalObstacle.msg
-  taskPoint.msg
+  targetPoint.msg
+  usv.msg
+  boatObstacle.msg
+  photo_trans.msg
+  radar_trans.msg
+  rectangleObstacle.msg
 )
 
 ## Generate services in the 'srv' folder
@@ -205,5 +210,22 @@ include_directories(
 # catkin_add_nosetests(test)
 add_executable(sys_sim sys_sim.cpp)
 target_link_libraries(sys_sim ${catkin_LIBRARIES})
-add_executable(taskLayer taskLayer_sim.cpp)
-target_link_libraries(taskLayer ${catkin_LIBRARIES})
+add_executable(Task_Maker Task_Maker.cpp)
+target_link_libraries(Task_Maker ${catkin_LIBRARIES})
+add_executable(controlLayer controlLayer_sim.cpp)
+target_link_libraries(controlLayer ${catkin_LIBRARIES})
+add_executable(photo_processor photo_processor.cpp)
+target_link_libraries(photo_processor ${catkin_LIBRARIES})
+add_executable(cloud_processor cloud_processor.cpp)
+target_link_libraries(cloud_processor ${catkin_LIBRARIES})
+add_executable(data_fusion data_fusion.cpp)
+target_link_libraries(data_fusion ${catkin_LIBRARIES})
+
+
+add_executable(LCM_Server lcm_send.cpp)
+target_link_libraries(LCM_Server lcm)
+target_link_libraries(LCM_Server ${catkin_LIBRARIES})
+
+add_executable(LCM_Client lcm_receive.cpp)
+target_link_libraries(LCM_Client lcm)
+target_link_libraries(LCM_Client ${catkin_LIBRARIES})

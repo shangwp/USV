@@ -1,0 +1,7 @@
+<launch>
+    
+    <node pkg="sys_sim" name="sys_sim" type="sys_sim"/>
+    <node pkg="sys_sim" name="Task_Maker" type="Task_Maker"/>
+    <node pkg="sys_sim" name="controlLayer" type="controlLayer"/>
+
+</launch>
