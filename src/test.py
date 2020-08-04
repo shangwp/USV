@@ -10,7 +10,7 @@ def on_connect(client,userdata,flags,rc):
 
 def on_message(client,userdata,msg):
     topic = '/ctrl'
-    v=0.3
+    v=0.8
     r=-1
     p=50
     data = struct.pack(">ffB",v,r,p)

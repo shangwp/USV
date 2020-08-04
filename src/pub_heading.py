@@ -10,15 +10,13 @@ rospy.init_node("talker1", anonymous=True)
 rate = rospy.Rate(5)
 
 def on_connect(client, userdata, flags, rc):
-    client.subscribe("/hdt")
+    client.subscribe("/bat")
     print("connect success")
 
 def on_message(client, userdata, msg):  
-    if msg.topic == "/hdt":
-        heading = struct.unpack('>f',msg.payload)
-        sendto = float(heading[0])
-        rospy.loginfo(sendto)
-        pub.publish(sendto)
+    if msg.topic == "/bat":
+        heading = struct.unpack('>B',msg.payload)
+        print(heading)
         rate.sleep()
 
 client = mqtt.Client()
